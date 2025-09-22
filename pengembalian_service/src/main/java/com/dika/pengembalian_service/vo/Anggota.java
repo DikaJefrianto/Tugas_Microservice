@@ -1,4 +1,4 @@
-package com.dika.peminjaman.vo;
+package com.dika.pengembalian_service.vo;
 
 public class Anggota {
     private Long id;
@@ -47,7 +47,7 @@ public class Anggota {
 
     @Override
     public String toString() {
-        // TODO Auto-generated method stub
+        
         return super.toString();
     }
 

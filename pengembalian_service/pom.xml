@@ -9,9 +9,9 @@
         <relativePath/> <!-- lookup parent from repository -->
     </parent>
     <groupId>com.dika</groupId>
-    <artifactId>pengembalian_service</artifactId>
+    <artifactId>pengembalian</artifactId>
     <version>0.0.1-SNAPSHOT</version>
-    <name>pengembalian_service</name>
+    <name>pengembalian</name>
     <description>Demo project for Spring Boot</description>
     <url/>
     <licenses>

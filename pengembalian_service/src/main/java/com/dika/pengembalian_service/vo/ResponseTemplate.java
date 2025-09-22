@@ -1,6 +1,6 @@
-package com.dika.peminjaman.vo;
+package com.dika.pengembalian_service.vo;
 
-import com.dika.peminjaman.model.Peminjaman;
+import com.dika.pengembalian_service.model.Pengembalian;
 
 public class ResponseTemplate {
 

@@ -1,6 +1,6 @@
 spring:
   application:
-    name: pengembalian_service # Nama unik untuk service ini
+    name: pengembalian-service # Nama unik untuk service ini
 
 eureka:
   client:

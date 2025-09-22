@@ -1,0 +1,42 @@
+## YAML Template.
+---
+server:
+    port: 9091
+    
+spring:
+    application:
+        name: API_GATEWAY
+    cloud:
+        gateway:
+                server:
+                    webmvc:         
+                        routes:
+                        - id: BUKU
+                          uri: lb://BUKU
+                          predicates: 
+                            - Path=api/buku/**
+                        - id: ANGGOTA
+                          uri: lb://ANGGOTA
+                          predicates: 
+                            - Path=api/anggota/**
+                        - id: PEMINJAMAN
+                          uri: lb://PEMINJAMAN
+                          predicates: 
+                            - Path=api/peminjaman/**
+                        - id: PENGEMBALIAN-SERVICE
+                          uri: lb://PENGEMBALIAN-SERVICE
+                          predicates: 
+                            - Path=api/pengembalian/**
+                        - id: PPEMINJAMAN
+                          uri: lb://PEMINJAMAN
+                          predicates: 
+                            - Path=api/peminjaman/**
+                    
+eureka:
+    client:
+        register-with-eureka: true
+        fetch-registry: true
+        service-url:
+            defaultZone: http://localhost:8761/eureka/
+    instance: 
+        hostname: localhost

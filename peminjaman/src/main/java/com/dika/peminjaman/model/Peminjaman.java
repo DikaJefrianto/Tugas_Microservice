@@ -1,8 +1,5 @@
 package com.dika.peminjaman.model;
 
-
-
-
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -10,18 +7,19 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import lombok.Data;
 
-
 @Data
-@Table(name = "peminjamans")
 @Entity
+@Table(name = "peminjamans")
 public class Peminjaman {
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-    private long anggotaId;
-    private long bukuId;
+
+    private Long anggotaId;
+    private Long bukuId;
+
+    // @Column(name = "tanggal_pinjam")
     private String tanggal_pinjam;
-    private String tanggal_kembali;
-    private Long pengembalianId;
     
 }
