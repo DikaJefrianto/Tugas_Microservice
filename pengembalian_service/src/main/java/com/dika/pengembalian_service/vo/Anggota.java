@@ -4,15 +4,17 @@ public class Anggota {
     private Long id;
     private String nim;
     private String nama;
+    private String email; 
     private String alamat;
     private String jenis_kelamin;
 
     
 
-    public Anggota(Long id, String nim, String nama, String alamat, String jenis_kelamin) {
+    public Anggota(Long id, String nim, String nama, String email, String alamat, String jenis_kelamin) {
         this.id = id;
         this.nim = nim;
         this.nama = nama;
+        this.email = email; // ✅ set email
         this.alamat = alamat;
         this.jenis_kelamin = jenis_kelamin;
     }
@@ -23,19 +25,17 @@ public class Anggota {
         this.id = id;
     }
 
-
-
     public void setNim(String nim) {
         this.nim = nim;
     }
-
-
 
     public void setNama(String nama) {
         this.nama = nama;
     }
 
-
+    public void setEmail(String email) {   // ✅ setter email
+        this.email = email;
+    }
 
     public void setAlamat(String alamat) {
         this.alamat = alamat;
@@ -63,9 +63,14 @@ public class Anggota {
         return nama;
     }
 
+    public String getEmail() {   // ✅ getter email
+        return email;
+    }
+
     public String getAlamat() {
         return alamat;
     }
+
     public String getJenisKelamin() {
         return jenis_kelamin;
     }

@@ -3,35 +3,69 @@ package com.dika.peminjaman.service;
 import java.util.List;
 import java.util.Optional;
 
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.stereotype.Service;
 
+import com.dika.peminjaman.config.RabbitMQConfig;
 import com.dika.peminjaman.model.Peminjaman;
 import com.dika.peminjaman.repository.PeminjamanRepository;
 
 @Service
 public class PeminjamanService {
 
-    @Autowired
-    private PeminjamanRepository peminjamanRepository;
+    private final PeminjamanRepository peminjamanRepository;
+    private final RabbitTemplate rabbitTemplate;
 
-    // Simpan data peminjaman baru
-    public Peminjaman createPeminjaman(Peminjaman peminjaman) {
-        return peminjamanRepository.save(peminjaman);
+    public PeminjamanService(PeminjamanRepository peminjamanRepository,
+                             RabbitTemplate rabbitTemplate) {
+        this.peminjamanRepository = peminjamanRepository;
+        this.rabbitTemplate = rabbitTemplate;
     }
 
-    // Ambil semua data peminjaman (tanpa detail anggota & buku)
+    /**
+     * Simpan data peminjaman dan kirim payload ke RabbitMQ
+     * Payload format: "anggotaId|bukuId"
+     */
+    public Peminjaman createPeminjaman(Peminjaman peminjaman) {
+        if (peminjaman == null) {
+            throw new IllegalArgumentException("Peminjaman tidak boleh null");
+        }
+
+        // Simpan data peminjaman ke database
+        Peminjaman saved = peminjamanRepository.save(peminjaman);
+
+        // Siapkan payload untuk dikirim ke email-service
+        String payload = saved.getAnggotaId() + "|" + saved.getBukuId();
+
+        // Kirim ke RabbitMQ
+        rabbitTemplate.convertAndSend(RabbitMQConfig.EMAIL_QUEUE, payload);
+
+        return saved;
+    }
+
+    /**
+     * Ambil semua data peminjaman
+     */
     public List<Peminjaman> getAllPeminjamans() {
         return peminjamanRepository.findAll();
     }
 
-    // Ambil peminjaman berdasarkan id
+    /**
+     * Ambil peminjaman berdasarkan ID
+     */
     public Optional<Peminjaman> getPeminjamanById(Long id) {
+        if (id == null) {
+            return Optional.empty();
+        }
         return peminjamanRepository.findById(id);
     }
 
-    // Hapus peminjaman
+    /**
+     * Hapus peminjaman berdasarkan ID
+     */
     public void deletePeminjaman(Long id) {
-        peminjamanRepository.deleteById(id);
+        if (id != null && peminjamanRepository.existsById(id)) {
+            peminjamanRepository.deleteById(id);
+        }
     }
 }

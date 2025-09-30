@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.dika.pengembalian_service.model.Pengembalian;
+import com.dika.pengembalian_service.service.EmailDendaService;
 import com.dika.pengembalian_service.service.PengembalianService;
 import com.dika.pengembalian_service.vo.ResponseTemplate;
 
@@ -22,6 +23,9 @@ public class PengembalianController {
 
     @Autowired
     private PengembalianService pengembalianService;
+    @Autowired
+    private EmailDendaService emailDendaService;
+
 
     // ✅ Ambil semua pengembalian (tanpa detail anggota, buku & peminjaman)
     @GetMapping
@@ -43,9 +47,32 @@ public class PengembalianController {
 
     // ✅ Buat pengembalian baru
     @PostMapping
-    public Pengembalian createPengembalian(@RequestBody Pengembalian pengembalian) {
-        return pengembalianService.createPengembalian(pengembalian);
+public Pengembalian createPengembalian(@RequestBody Pengembalian pengembalian) {
+    // Simpan pengembalian dan hitung denda otomatis
+    Pengembalian saved = pengembalianService.createPengembalian(pengembalian);
+
+    // Ambil detail lengkap (anggota & buku) untuk email
+    ResponseTemplate details = pengembalianService.getPengembalianWithDetailsById(saved.getId());
+
+    if (details != null) {
+        long hariTerlambat = Long.parseLong(saved.getTerlambat());
+        double totalDenda = saved.getDenda();
+
+        // Kirim email hanya jika ada keterlambatan
+        if (hariTerlambat > 0) {
+            emailDendaService.kirimEmailDenda(
+                details.getAnggota().getEmail(),
+                details.getAnggota().getNama(),
+                details.getBuku().getJudul(),
+                hariTerlambat,
+                totalDenda
+            );
+        }
     }
+
+    return saved;
+}
+
 
     // ✅ Hapus pengembalian
     @DeleteMapping("/{id}")
