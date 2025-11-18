@@ -1,8 +1,8 @@
 package com.dika.pengembalian_service.service;
 
 import java.time.LocalDate;
-import java.time.temporal.ChronoUnit;
 import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -10,6 +10,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cloud.client.ServiceInstance;
 import org.springframework.cloud.client.discovery.DiscoveryClient;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
 import com.dika.pengembalian_service.model.Pengembalian;
@@ -36,34 +37,61 @@ public class PengembalianService {
 
     private static final double DENDA_PER_HARI = 2000;
 
+    // Nama Service harus lowercase (sesuai spring.application.name)
+    private static final String PEMINJAMAN_SERVICE_ID = "peminjaman";
+    private static final String ANGGOTA_SERVICE_ID = "anggota";
+    private static final String BUKU_SERVICE_ID = "buku";
+    
+    // Helper untuk mendapatkan Base URL dari service
+    private String getBaseUrl(String serviceId) {
+        List<ServiceInstance> instances = discoveryClient.getInstances(serviceId);
+        if (instances.isEmpty()) {
+            // Menggunakan serviceId yang sebenarnya dalam pesan error
+            throw new IllegalStateException("Service " + serviceId.toUpperCase() + " tidak tersedia di Discovery Client"); 
+        }
+        return instances.get(0).getUri().toString();
+    }
+
     /**
      * Buat pengembalian baru dengan tanggal dikembalikan manual
      */
     public Pengembalian createPengembalian(Pengembalian pengembalian) {
-        if (pengembalian.getTanggal_dikembalikan() == null) {
+        if (pengembalian.getTanggal_dikembalikan() == null || pengembalian.getTanggal_dikembalikan().isEmpty()) {
             throw new IllegalArgumentException("Tanggal pengembalian harus diinput");
         }
 
-        // Ambil tanggal pinjam dari service Peminjaman
-        List<ServiceInstance> peminjamanInstances = discoveryClient.getInstances("PEMINJAMAN");
-        if (peminjamanInstances.isEmpty()) {
-            throw new IllegalStateException("Service PEMINJAMAN tidak tersedia");
+        // --- Ambil service instance PEMINJAMAN ---
+        String baseUrlPeminjaman;
+        try {
+            baseUrlPeminjaman = getBaseUrl(PEMINJAMAN_SERVICE_ID);
+        } catch (IllegalStateException e) {
+            // Meneruskan error jika service tidak ditemukan
+            throw new IllegalStateException(e.getMessage()); 
         }
 
-        Peminjaman peminjaman = restTemplate.getForObject(
-                peminjamanInstances.get(0).getUri() + "/api/peminjaman/" + pengembalian.getPeminjamanId(),
-                Peminjaman.class);
-
-        if (peminjaman == null || peminjaman.getTanggal_pinjam() == null) {
-            throw new IllegalArgumentException("Tanggal pinjam tidak ditemukan");
+        String peminjamanUrl = baseUrlPeminjaman + "/api/peminjaman/" + pengembalian.getPeminjamanId();
+        Peminjaman peminjaman;
+        
+        System.out.println("DEBUG: Panggil Peminjaman URL: " + peminjamanUrl); // LOG Tambahan
+        
+        try {
+            peminjaman = restTemplate.getForObject(peminjamanUrl, Peminjaman.class);
+        } catch (RestClientException e) {
+            throw new IllegalStateException("Gagal memanggil service PEMINJAMAN: " + e.getMessage() + ". URL: " + peminjamanUrl);
         }
 
-        // Format tanggal dd-MM-yyyy
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd-MM-yyyy");
-        LocalDate tanggalPinjam = LocalDate.parse(peminjaman.getTanggal_pinjam(), formatter);
-        LocalDate tanggalDikembalikan = LocalDate.parse(pengembalian.getTanggal_dikembalikan(), formatter);
+        // BARIS KRITIS (sebelumnya di baris 58)
+        if (peminjaman == null || peminjaman.getTanggalPinjam() == null) {
+             System.err.println("DEBUG: Hasil Peminjaman null? " + (peminjaman == null) + 
+                                ". Tanggal Pinjam null? " + (peminjaman != null && peminjaman.getTanggalPinjam() == null)); // LOG Tambahan
+            throw new IllegalArgumentException("Tanggal pinjam tidak ditemukan pada data peminjaman ID: " + pengembalian.getPeminjamanId());
+        }
 
-        // Hitung keterlambatan
+        // --- Parsing tanggal pinjam dan dikembalikan ---
+        LocalDate tanggalPinjam = parseTanggal(peminjaman.getTanggalPinjam());
+        LocalDate tanggalDikembalikan = parseTanggal(pengembalian.getTanggal_dikembalikan());
+
+        // --- Hitung selisih hari ---
         long terlambatHari = ChronoUnit.DAYS.between(tanggalPinjam, tanggalDikembalikan);
         if (terlambatHari < 0) terlambatHari = 0;
 
@@ -72,22 +100,48 @@ public class PengembalianService {
 
         Pengembalian savedPengembalian = pengembalianRepository.save(pengembalian);
 
-        // Kirim email denda jika ada keterlambatan
+        // --- Kirim email denda jika ada keterlambatan ---
         if (terlambatHari > 0) {
+            kirimEmailDendaJikaPerlu(peminjaman, terlambatHari);
+        }
+
+        return savedPengembalian;
+    }
+
+    private LocalDate parseTanggal(String tanggalStr) {
+        // Mendukung dua format umum
+        DateTimeFormatter formatter1 = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+        DateTimeFormatter formatter2 = DateTimeFormatter.ofPattern("dd-MM-yyyy");
+
+        try {
+            return LocalDate.parse(tanggalStr, formatter1);
+        } catch (Exception e1) {
+            try {
+                return LocalDate.parse(tanggalStr, formatter2);
+            } catch (Exception e2) {
+                throw new IllegalArgumentException("Format tanggal tidak valid: " + tanggalStr +
+                        ". Gunakan format yyyy-MM-dd atau dd-MM-yyyy");
+            }
+        }
+    }
+
+    private void kirimEmailDendaJikaPerlu(Peminjaman peminjaman, long terlambatHari) {
+        try {
             Anggota anggota = null;
-            List<ServiceInstance> anggotaInstances = discoveryClient.getInstances("ANGGOTA");
-            if (!anggotaInstances.isEmpty() && peminjaman.getAnggotaId() != null) {
-                anggota = restTemplate.getForObject(
-                        anggotaInstances.get(0).getUri() + "/api/anggota/" + peminjaman.getAnggotaId(),
-                        Anggota.class);
+            Buku buku = null;
+
+            // --- Ambil data anggota ---
+            String baseUrlAnggota = getBaseUrl(ANGGOTA_SERVICE_ID);
+            if (peminjaman.getAnggotaId() != null) {
+                String anggotaUrl = baseUrlAnggota + "/api/anggota/" + peminjaman.getAnggotaId();
+                anggota = restTemplate.getForObject(anggotaUrl, Anggota.class);
             }
 
-            Buku buku = null;
-            List<ServiceInstance> bukuInstances = discoveryClient.getInstances("BUKU");
-            if (!bukuInstances.isEmpty() && peminjaman.getBukuId() != null) {
-                buku = restTemplate.getForObject(
-                        bukuInstances.get(0).getUri() + "/api/buku/" + peminjaman.getBukuId(),
-                        Buku.class);
+            // --- Ambil data buku ---
+            String baseUrlBuku = getBaseUrl(BUKU_SERVICE_ID);
+            if (peminjaman.getBukuId() != null) {
+                String bukuUrl = baseUrlBuku + "/api/buku/" + peminjaman.getBukuId();
+                buku = restTemplate.getForObject(bukuUrl, Buku.class);
             }
 
             if (anggota != null && buku != null) {
@@ -99,68 +153,72 @@ public class PengembalianService {
                         terlambatHari * DENDA_PER_HARI
                 );
             }
+        } catch (Exception e) {
+            System.err.println("Gagal mengirim email denda: " + e.getMessage());
         }
-
-        return savedPengembalian;
     }
 
-    // Ambil semua pengembalian tanpa detail
+    // --- Ambil semua pengembalian tanpa detail ---
     public List<Pengembalian> getAllPengembalian() {
         return pengembalianRepository.findAll();
     }
 
-    // Ambil 1 pengembalian by ID
+    // --- Ambil 1 pengembalian by ID ---
     public Pengembalian getPengembalianById(Long id) {
         return pengembalianRepository.findById(id).orElse(null);
     }
 
-    // Ambil 1 pengembalian lengkap dengan detail
+    // --- Ambil pengembalian lengkap dengan detail ---
     public ResponseTemplate getPengembalianWithDetailsById(Long id) {
         Pengembalian pengembalian = getPengembalianById(id);
         if (pengembalian == null) return null;
 
-        // --- Ambil data Peminjaman ---
-        List<ServiceInstance> peminjamanInstances = discoveryClient.getInstances("PEMINJAMAN");
-        if (peminjamanInstances.isEmpty()) throw new IllegalStateException("Service PEMINJAMAN tidak tersedia");
-        Peminjaman peminjaman = restTemplate.getForObject(
-                peminjamanInstances.get(0).getUri() + "/api/peminjaman/" + pengembalian.getPeminjamanId(),
-                Peminjaman.class);
-
-        // --- Ambil data Anggota ---
-        Anggota anggota = null;
-        List<ServiceInstance> anggotaInstances = discoveryClient.getInstances("ANGGOTA");
-        if (!anggotaInstances.isEmpty() && peminjaman != null && peminjaman.getAnggotaId() != null) {
-            anggota = restTemplate.getForObject(
-                    anggotaInstances.get(0).getUri() + "/api/anggota/" + peminjaman.getAnggotaId(),
-                    Anggota.class);
+        String baseUrlPeminjaman;
+        try {
+            baseUrlPeminjaman = getBaseUrl(PEMINJAMAN_SERVICE_ID);
+        } catch (IllegalStateException e) {
+            throw new IllegalStateException(e.getMessage()); 
         }
 
-        // --- Ambil data Buku ---
+        Peminjaman peminjaman = restTemplate.getForObject(
+                baseUrlPeminjaman + "/api/peminjaman/" + pengembalian.getPeminjamanId(),
+                Peminjaman.class);
+
+        Anggota anggota = null;
         Buku buku = null;
-        List<ServiceInstance> bukuInstances = discoveryClient.getInstances("BUKU");
-        if (!bukuInstances.isEmpty() && peminjaman != null && peminjaman.getBukuId() != null) {
-            buku = restTemplate.getForObject(
-                    bukuInstances.get(0).getUri() + "/api/buku/" + peminjaman.getBukuId(),
-                    Buku.class);
+
+        if (peminjaman != null) {
+            // --- Ambil data anggota ---
+            String baseUrlAnggota = getBaseUrl(ANGGOTA_SERVICE_ID);
+            if (peminjaman.getAnggotaId() != null) {
+                anggota = restTemplate.getForObject(
+                        baseUrlAnggota + "/api/anggota/" + peminjaman.getAnggotaId(),
+                        Anggota.class);
+            }
+
+            // --- Ambil data buku ---
+            String baseUrlBuku = getBaseUrl(BUKU_SERVICE_ID);
+            if (peminjaman.getBukuId() != null) {
+                buku = restTemplate.getForObject(
+                        baseUrlBuku + "/api/buku/" + peminjaman.getBukuId(),
+                        Buku.class);
+            }
         }
 
         return new ResponseTemplate(peminjaman, anggota, buku, pengembalian);
     }
 
-    // Ambil semua pengembalian lengkap dengan detail
+    // --- Ambil semua pengembalian lengkap ---
     public List<ResponseTemplate> getAllPengembalianWithDetails() {
         List<ResponseTemplate> responseList = new ArrayList<>();
-        List<Pengembalian> pengembalianList = pengembalianRepository.findAll();
-
-        for (Pengembalian pengembalian : pengembalianList) {
+        for (Pengembalian pengembalian : pengembalianRepository.findAll()) {
             ResponseTemplate response = getPengembalianWithDetailsById(pengembalian.getId());
             if (response != null) responseList.add(response);
         }
-
         return responseList;
     }
 
-    // Hapus pengembalian
+    // --- Hapus pengembalian ---
     public void deletePengembalian(Long id) {
         pengembalianRepository.deleteById(id);
     }

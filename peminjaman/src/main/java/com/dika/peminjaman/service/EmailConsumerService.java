@@ -48,6 +48,7 @@ public class EmailConsumerService {
 
     private final JavaMailSender mailSender;
     private final RestTemplate restTemplate;
+
     private final String anggotaServiceUrl = "http://localhost:8082/api/anggota/";
     private final String bukuServiceUrl = "http://localhost:8081/api/buku/";
 
@@ -56,26 +57,29 @@ public class EmailConsumerService {
         this.restTemplate = new RestTemplate();
     }
 
+    /**
+     * Listener RabbitMQ
+     * Format payload: "anggotaId|bukuId"
+     */
     @RabbitListener(queues = RabbitMQConfig.EMAIL_QUEUE)
-    public void receiveMessage(String payload) {
-        // payload format: "anggotaId|bukuId"
+    public void receiveEvent(String payload) {
         try {
             String[] parts = payload.split("\\|");
             Long anggotaId = Long.parseLong(parts[0]);
             Long bukuId = Long.parseLong(parts[1]);
 
             // Ambil data anggota
-            ResponseEntity<AnggotaDTO> responseAnggota = restTemplate.getForEntity(
-                    anggotaServiceUrl + anggotaId, AnggotaDTO.class);
+            ResponseEntity<AnggotaDTO> responseAnggota =
+                    restTemplate.getForEntity(anggotaServiceUrl + anggotaId, AnggotaDTO.class);
             AnggotaDTO anggota = responseAnggota.getBody();
 
             // Ambil data buku
-            ResponseEntity<BukuDTO> responseBuku = restTemplate.getForEntity(
-                    bukuServiceUrl + bukuId, BukuDTO.class);
+            ResponseEntity<BukuDTO> responseBuku =
+                    restTemplate.getForEntity(bukuServiceUrl + bukuId, BukuDTO.class);
             BukuDTO buku = responseBuku.getBody();
 
+            // Kirim email jika data valid
             if (anggota != null && buku != null && anggota.getEmail() != null) {
-                // Buat email HTML
                 String emailBody = "<h2>Peminjaman Buku Berhasil</h2>"
                         + "<p>Halo <strong>" + anggota.getNama() + "</strong>,</p>"
                         + "<p>Anda telah berhasil meminjam buku dengan detail berikut:</p>"
@@ -101,7 +105,7 @@ public class EmailConsumerService {
             helper.setSubject(subject);
             helper.setText(body, true); // true = HTML
             mailSender.send(message);
-            System.out.println("Email terkirim ke " + to);
+            System.out.println("✅ Email terkirim ke " + to);
         } catch (MessagingException e) {
             e.printStackTrace();
         }

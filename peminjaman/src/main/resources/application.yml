@@ -1,25 +1,23 @@
 spring:
   application:
-    name: peminjaman
+    name: PEMINJAMAN
 
-  # RabbitMQ Configuration
   rabbitmq:
-    host: localhost
+    host: rabbitmq
     port: 5672
-    username: guest
-    password: guest
+    username: admin
+    password: password
     listener:
       simple:
         acknowledge-mode: auto
         concurrency: 1
         max-concurrency: 5
 
-  # Mail Configuration
   mail:
     host: smtp.gmail.com
     port: 587
-    username: thefruss032@gmail.com      # ganti dengan email kamu
-    password: dixvfwdefnujufmy          # ganti dengan app password
+    username: thefruss032@gmail.com
+    password: dixvfwdefnujufmy
     properties:
       mail:
         smtp:
@@ -27,8 +25,11 @@ spring:
           starttls:
             enable: true
 
+eureka:
+  client:
+    service-url:
+      defaultZone: http://eureka-server:8761/eureka/
 
-# Logging (opsional)
 logging:
   level:
     org.springframework: INFO
