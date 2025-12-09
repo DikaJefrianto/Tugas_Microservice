@@ -1,5 +1,10 @@
 pipeline {
-    agent any
+    agent {
+        docker {
+            image 'maven:3.9.2-openjdk-17'
+            args '-v $HOME/.m2:/root/.m2'  // cache Maven
+        }
+    }
 
     environment {
         REGISTRY = "thefruss032"    // Username DockerHub
@@ -13,6 +18,7 @@ pipeline {
                 checkout scm
             }
         }
+
         stage('Build JAR') {
             steps {
                 sh """
@@ -25,6 +31,7 @@ pipeline {
                 """
             }
         }
+
         stage('Build Docker Images') {
             parallel {
                 stage('anggota-service') {
@@ -34,7 +41,6 @@ pipeline {
                         }
                     }
                 }
-
                 stage('buku-service') {
                     steps {
                         script {
@@ -42,7 +48,6 @@ pipeline {
                         }
                     }
                 }
-
                 stage('peminjaman-service') {
                     steps {
                         script {
@@ -50,7 +55,6 @@ pipeline {
                         }
                     }
                 }
-
                 stage('pengembalian-service') {
                     steps {
                         script {
@@ -58,7 +62,6 @@ pipeline {
                         }
                     }
                 }
-
                 stage('api-gateway') {
                     steps {
                         script {
@@ -66,7 +69,6 @@ pipeline {
                         }
                     }
                 }
-
                 stage('eureka-server') {
                     steps {
                         script {
@@ -74,7 +76,6 @@ pipeline {
                         }
                     }
                 }
-
                 stage('logstash') {
                     steps {
                         script {
@@ -97,56 +98,19 @@ pipeline {
 
         stage('Push Images') {
             parallel {
-
-                stage('push-anggota') {
-                    steps {
-                        sh "docker push ${REGISTRY}/anggota-service:${IMAGE_TAG}"
-                    }
-                }
-
-                stage('push-buku') {
-                    steps {
-                        sh "docker push ${REGISTRY}/buku-service:${IMAGE_TAG}"
-                    }
-                }
-
-                stage('push-peminjaman') {
-                    steps {
-                        sh "docker push ${REGISTRY}/peminjaman-service:${IMAGE_TAG}"
-                    }
-                }
-
-                stage('push-pengembalian') {
-                    steps {
-                        sh "docker push ${REGISTRY}/pengembalian-service:${IMAGE_TAG}"
-                    }
-                }
-
-                stage('push-api-gateway') {
-                    steps {
-                        sh "docker push ${REGISTRY}/api-gateway:${IMAGE_TAG}"
-                    }
-                }
-
-                stage('push-eureka') {
-                    steps {
-                        sh "docker push ${REGISTRY}/eureka-server:${IMAGE_TAG}"
-                    }
-                }
-
-                stage('push-logstash') {
-                    steps {
-                        sh "docker push ${REGISTRY}/logstash:${IMAGE_TAG}"
-                    }
-                }
+                stage('push-anggota') { steps { sh "docker push ${REGISTRY}/anggota-service:${IMAGE_TAG}" } }
+                stage('push-buku') { steps { sh "docker push ${REGISTRY}/buku-service:${IMAGE_TAG}" } }
+                stage('push-peminjaman') { steps { sh "docker push ${REGISTRY}/peminjaman-service:${IMAGE_TAG}" } }
+                stage('push-pengembalian') { steps { sh "docker push ${REGISTRY}/pengembalian-service:${IMAGE_TAG}" } }
+                stage('push-api-gateway') { steps { sh "docker push ${REGISTRY}/api-gateway:${IMAGE_TAG}" } }
+                stage('push-eureka') { steps { sh "docker push ${REGISTRY}/eureka-server:${IMAGE_TAG}" } }
+                stage('push-logstash') { steps { sh "docker push ${REGISTRY}/logstash:${IMAGE_TAG}" } }
             }
         }
 
         stage('Deploy to Kubernetes') {
             steps {
-                sh """
-                    kubectl apply -f manifests/
-                """
+                sh "kubectl apply -f manifests/"
             }
         }
     }
