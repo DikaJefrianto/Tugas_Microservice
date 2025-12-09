@@ -13,7 +13,18 @@ pipeline {
                 checkout scm
             }
         }
-
+        stage('Build JAR') {
+            steps {
+                sh """
+                    mvn -f anggota/pom.xml clean package -DskipTests
+                    mvn -f buku/pom.xml clean package -DskipTests
+                    mvn -f peminjaman/pom.xml clean package -DskipTests
+                    mvn -f pengembalian_service/pom.xml clean package -DskipTests
+                    mvn -f api_gateway/pom.xml clean package -DskipTests
+                    mvn -f eureka-server/pom.xml clean package -DskipTests
+                """
+            }
+        }
         stage('Build Docker Images') {
             parallel {
                 stage('anggota-service') {
