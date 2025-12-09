@@ -1,6 +1,4 @@
 pipeline {
-    agent none  // Tidak pakai default agent, tiap stage bisa pakai agent sendiri
-
     environment {
         REGISTRY = "thefruss032"    // Username DockerHub
         IMAGE_TAG = "${env.BRANCH_NAME}-${env.BUILD_NUMBER}"
