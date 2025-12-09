@@ -1,10 +1,5 @@
 pipeline {
-    agent {
-        docker {
-            image 'maven:3.9.11-eclipse-temurin-17'
-            args '-v $HOME/.m2:/root/.m2'  // cache Maven
-        }
-    }
+    agent any  // gunakan node Jenkins host untuk stages Docker & kubectl
 
     environment {
         REGISTRY = "thefruss032"    // Username DockerHub
@@ -20,6 +15,12 @@ pipeline {
         }
 
         stage('Build JAR') {
+            agent {
+                docker {
+                    image 'maven:3.9.11-eclipse-temurin-17'
+                    args '-v $HOME/.m2:/root/.m2' // cache Maven
+                }
+            }
             steps {
                 sh """
                     mvn -f anggota/pom.xml clean package -DskipTests
@@ -34,64 +35,20 @@ pipeline {
 
         stage('Build Docker Images') {
             parallel {
-                stage('anggota-service') {
-                    steps {
-                        script {
-                            docker.build("${REGISTRY}/anggota-service:${IMAGE_TAG}", "./anggota")
-                        }
-                    }
-                }
-                stage('buku-service') {
-                    steps {
-                        script {
-                            docker.build("${REGISTRY}/buku-service:${IMAGE_TAG}", "./buku")
-                        }
-                    }
-                }
-                stage('peminjaman-service') {
-                    steps {
-                        script {
-                            docker.build("${REGISTRY}/peminjaman-service:${IMAGE_TAG}", "./peminjaman")
-                        }
-                    }
-                }
-                stage('pengembalian-service') {
-                    steps {
-                        script {
-                            docker.build("${REGISTRY}/pengembalian-service:${IMAGE_TAG}", "./pengembalian_service")
-                        }
-                    }
-                }
-                stage('api-gateway') {
-                    steps {
-                        script {
-                            docker.build("${REGISTRY}/api-gateway:${IMAGE_TAG}", "./api_gateway")
-                        }
-                    }
-                }
-                stage('eureka-server') {
-                    steps {
-                        script {
-                            docker.build("${REGISTRY}/eureka-server:${IMAGE_TAG}", "./eureka-server")
-                        }
-                    }
-                }
-                stage('logstash') {
-                    steps {
-                        script {
-                            docker.build("${REGISTRY}/logstash:${IMAGE_TAG}", "./logstash")
-                        }
-                    }
-                }
+                stage('anggota-service') { steps { script { docker.build("${REGISTRY}/anggota-service:${IMAGE_TAG}", "./anggota") } } }
+                stage('buku-service') { steps { script { docker.build("${REGISTRY}/buku-service:${IMAGE_TAG}", "./buku") } } }
+                stage('peminjaman-service') { steps { script { docker.build("${REGISTRY}/peminjaman-service:${IMAGE_TAG}", "./peminjaman") } } }
+                stage('pengembalian-service') { steps { script { docker.build("${REGISTRY}/pengembalian-service:${IMAGE_TAG}", "./pengembalian_service") } } }
+                stage('api-gateway') { steps { script { docker.build("${REGISTRY}/api-gateway:${IMAGE_TAG}", "./api_gateway") } } }
+                stage('eureka-server') { steps { script { docker.build("${REGISTRY}/eureka-server:${IMAGE_TAG}", "./eureka-server") } } }
+                stage('logstash') { steps { script { docker.build("${REGISTRY}/logstash:${IMAGE_TAG}", "./logstash") } } }
             }
         }
 
         stage('Login DockerHub') {
             steps {
                 withCredentials([string(credentialsId: 'dockerhub-token', variable: 'DOCKER_TOKEN')]) {
-                    sh """
-                        echo "$DOCKER_TOKEN" | docker login -u "${REGISTRY}" --password-stdin
-                    """
+                    sh 'echo "$DOCKER_TOKEN" | docker login -u "${REGISTRY}" --password-stdin'
                 }
             }
         }
