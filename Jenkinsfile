@@ -1,7 +1,7 @@
 pipeline {
     agent {
         docker {
-            image 'maven:3.9.2-openjdk-17'
+            image 'maven:3.9.11-eclipse-temurin-17'
             args '-v $HOME/.m2:/root/.m2'  // cache Maven
         }
     }
