@@ -1,5 +1,5 @@
 pipeline {
-    agent any  // gunakan node Jenkins host untuk stages Docker & kubectl
+    agent none  // Tidak pakai default agent, tiap stage bisa pakai agent sendiri
 
     environment {
         REGISTRY = "thefruss032"    // Username DockerHub
@@ -9,6 +9,7 @@ pipeline {
     stages {
 
         stage('Checkout') {
+            agent any
             steps {
                 checkout scm
             }
@@ -34,6 +35,7 @@ pipeline {
         }
 
         stage('Build Docker Images') {
+            agent any  // pakai host agar bisa akses Docker
             parallel {
                 stage('anggota-service') { steps { script { docker.build("${REGISTRY}/anggota-service:${IMAGE_TAG}", "./anggota") } } }
                 stage('buku-service') { steps { script { docker.build("${REGISTRY}/buku-service:${IMAGE_TAG}", "./buku") } } }
@@ -46,6 +48,7 @@ pipeline {
         }
 
         stage('Login DockerHub') {
+            agent any
             steps {
                 withCredentials([string(credentialsId: 'dockerhub-token', variable: 'DOCKER_TOKEN')]) {
                     sh 'echo "$DOCKER_TOKEN" | docker login -u "${REGISTRY}" --password-stdin'
@@ -54,6 +57,7 @@ pipeline {
         }
 
         stage('Push Images') {
+            agent any
             parallel {
                 stage('push-anggota') { steps { sh "docker push ${REGISTRY}/anggota-service:${IMAGE_TAG}" } }
                 stage('push-buku') { steps { sh "docker push ${REGISTRY}/buku-service:${IMAGE_TAG}" } }
@@ -66,6 +70,7 @@ pipeline {
         }
 
         stage('Deploy to Kubernetes') {
+            agent any
             steps {
                 sh "kubectl apply -f manifests/"
             }
