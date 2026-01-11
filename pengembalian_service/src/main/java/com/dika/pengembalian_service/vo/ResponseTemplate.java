@@ -1,6 +1,6 @@
 package com.dika.pengembalian_service.vo;
 
-import com.dika.pengembalian_service.model.Pengembalian;
+import com.dika.pengembalian_service.cqrs.command.model.Pengembalian;
 
 public class ResponseTemplate {
 

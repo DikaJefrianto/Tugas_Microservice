@@ -1,7 +1,5 @@
 spring:
-  application:
-    name: PEMINJAMAN
-
+  
   rabbitmq:
     host: rabbitmq
     port: 5672

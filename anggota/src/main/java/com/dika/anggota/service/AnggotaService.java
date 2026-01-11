@@ -5,13 +5,13 @@ import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import com.dika.anggota.model.Anggota;
-import com.dika.anggota.repository.AnggotaRepository;
+import com.dika.anggota.cqrs.command.model.Anggota;
+import com.dika.anggota.repository.AnggotaJpaRepository;
 
 @Service
 public class AnggotaService {
     @Autowired
-    private AnggotaRepository anggotaRepository;
+    private AnggotaJpaRepository anggotaRepository;
 
     public List<Anggota> getAllAnggota(){
         return anggotaRepository.findAll();

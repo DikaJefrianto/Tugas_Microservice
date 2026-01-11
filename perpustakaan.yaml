@@ -22,7 +22,7 @@ metadata:
   name: app-config
   namespace: perpustakaan-ns
 data:
-  EUREKA_SERVER_URL: "http://eureka-server-service:8761/eureka/"
+  EUREKA_SERVER_URL: "http://eureka-server:8761/eureka/"
 
 # ==============================================================================
 # 1. EUREKA SERVER (Port: 8761)

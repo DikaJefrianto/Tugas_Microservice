@@ -1,44 +1,38 @@
 package com.dika.peminjaman.controller;
 
-import java.util.List;
-
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
-
-import com.dika.peminjaman.cqrs.command.CreatePeminjamanCommand;
 import com.dika.peminjaman.cqrs.command.handler.PeminjamanCommandHandler;
+import com.dika.peminjaman.cqrs.command.model.Peminjaman;
 import com.dika.peminjaman.cqrs.query.handler.PeminjamanQueryHandler;
-import com.dika.peminjaman.model.Peminjaman;
+import com.dika.peminjaman.cqrs.query.model.PeminjamanDocument;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/peminjaman")
 public class PeminjamanController {
-
-    private final PeminjamanCommandHandler commandHandler;
-    private final PeminjamanQueryHandler queryHandler;
-
-    public PeminjamanController(PeminjamanCommandHandler commandHandler,
-                                PeminjamanQueryHandler queryHandler) {
-        this.commandHandler = commandHandler;
-        this.queryHandler = queryHandler;
-    }
+    @Autowired private PeminjamanCommandHandler commandHandler;
+    @Autowired private PeminjamanQueryHandler queryHandler;
 
     @PostMapping
-    public Peminjaman create(@RequestBody CreatePeminjamanCommand command) {
-        return commandHandler.handle(command);
+    public ResponseEntity<Peminjaman> create(@RequestBody Peminjaman peminjaman) {
+        return ResponseEntity.ok(commandHandler.handleCreate(peminjaman));
     }
 
     @GetMapping
-    public List<Peminjaman> getAll() {
-        return queryHandler.getAll();
+    public ResponseEntity<List<PeminjamanDocument>> getAll() {
+        return ResponseEntity.ok(queryHandler.handleGetAll());
     }
 
     @GetMapping("/{id}")
-    public Peminjaman getById(@PathVariable Long id) {
-        return queryHandler.getById(id).orElse(null);
+    public ResponseEntity<PeminjamanDocument> getById(@PathVariable String id) {
+        return queryHandler.handleGetById(id).map(ResponseEntity::ok).orElse(ResponseEntity.notFound().build());
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<String> delete(@PathVariable Long id) {
+        commandHandler.handleDelete(id);
+        return ResponseEntity.ok("Peminjaman Berhasil Dihapus");
     }
 }

@@ -1,45 +1,43 @@
 package com.dika.buku.controller;
 
-import java.util.List;
-
+import com.dika.buku.cqrs.command.handler.BukuCommandHandler;
+import com.dika.buku.cqrs.command.model.Buku;
+import com.dika.buku.cqrs.query.handler.BukuQueryHandler;
+import com.dika.buku.cqrs.query.model.BukuDocument;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.DeleteMapping;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
-
-import com.dika.buku.model.Buku;
-import com.dika.buku.service.BukuService;
+import org.springframework.web.bind.annotation.*;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/buku")
 public class BukuController {
-    @Autowired
-    private BukuService bukuService;
+    @Autowired private BukuCommandHandler commandHandler;
+    @Autowired private BukuQueryHandler queryHandler;
+
+    @PostMapping
+    public ResponseEntity<Buku> create(@RequestBody Buku buku) {
+        return ResponseEntity.ok(commandHandler.handleCreate(buku));
+    }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<Buku> update(@PathVariable Long id, @RequestBody Buku buku) {
+        return ResponseEntity.ok(commandHandler.handleUpdate(id, buku));
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<String> delete(@PathVariable Long id) {
+        commandHandler.handleDelete(id);
+        return ResponseEntity.ok("Buku Berhasil Dihapus");
+    }
 
     @GetMapping
-    public List<Buku> getAllBuku() {
-        return bukuService.getAllBukus();
+    public ResponseEntity<List<BukuDocument>> getAll() {
+        return ResponseEntity.ok(queryHandler.handleGetAll());
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<Buku> getBukuById(@PathVariable Long id) {
-        Buku buku = bukuService.getBukuById(id);
-        return buku != null ? ResponseEntity.ok(buku) : ResponseEntity.notFound().build();
-    }
-
-    @PostMapping
-    public Buku createBuku(@RequestBody Buku buku) {
-        return bukuService.createBuku(buku);
-    }
-    
-    @DeleteMapping("/{id}")
-    public ResponseEntity<?> deleteBuku(@PathVariable Long id) {
-        bukuService.deleteBuku(id);
-        return ResponseEntity.ok().build();
+    public ResponseEntity<BukuDocument> getById(@PathVariable String id) {
+        return queryHandler.handleGetById(id).map(ResponseEntity::ok).orElse(ResponseEntity.notFound().build());
     }
 }

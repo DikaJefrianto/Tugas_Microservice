@@ -1,6 +1,5 @@
 spring:
   application:
-    name: pengembalian-service # Nama unik untuk service ini
   mail:
     host: smtp.gmail.com
     port: 587

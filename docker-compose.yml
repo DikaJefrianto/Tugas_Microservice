@@ -1,20 +1,31 @@
-# version: '3.7'
+version: '3.8'
 
 services:
-  # 1. Elasticsearch
   elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:7.17.10 # Pilih versi yang stabil
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.17.10
     container_name: elasticsearch
     environment:
+      - node.name=elasticsearch
       - discovery.type=single-node
-      - xpack.security.enabled=false # Nonaktifkan security untuk setup sederhana
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m" # Batasi RAM agar Docker Desktop tidak berat
     ports:
       - "9200:9200"
-      - "9300:9300"
-    volumes:
-      - esdata:/usr/share/elasticsearch/data
+    networks:
+      - elk-net
 
-  # 2. Kibana
+  logstash:
+    image: docker.elastic.co/logstash/logstash:7.17.10
+    container_name: logstash
+    ports:
+      - "5000:5000"     # Port TCP untuk log dari Microservices
+      - "9600:9600"
+    volumes:
+      - ./logstash-config/:/usr/share/logstash/pipeline/
+    depends_on:
+      - elasticsearch
+    networks:
+      - elk-net
+
   kibana:
     image: docker.elastic.co/kibana/kibana:7.17.10
     container_name: kibana
@@ -24,24 +35,12 @@ services:
       - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
     depends_on:
       - elasticsearch
+    networks:
+      - elk-net
 
-  # 3. Logstash (Menerima dari Filebeat, memproses, mengirim ke Elasticsearch)
-  logstash:
-    image: docker.elastic.co/logstash/logstash:7.17.10
-    container_name: logstash
-    ports:
-      - "5044:5044" # Port default Filebeat input
-    volumes:
-      - ./logstash/config/logstash.yml:/usr/share/logstash/config/logstash.yml
-      - ./logstash/pipeline:/usr/share/logstash/pipeline/
-    environment:
-      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
-    depends_on:
-      - elasticsearch
-
-volumes:
-  esdata:
-    driver: local
+networks:
+  elk-net:
+    driver: bridge
 
 
 # #version: '3.8'

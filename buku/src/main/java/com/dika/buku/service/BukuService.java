@@ -7,13 +7,13 @@ import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import com.dika.buku.model.Buku;
-import com.dika.buku.repository.BukuRepository;
+import com.dika.buku.cqrs.command.model.Buku;
+import com.dika.buku.repository.BukuJpaRepository;
 
 @Service
 public class BukuService {
     @Autowired
-    private BukuRepository bukuRepository;
+    private BukuJpaRepository bukuRepository;
 
     public List<Buku> getAllBukus(){
         return bukuRepository.findAll();
