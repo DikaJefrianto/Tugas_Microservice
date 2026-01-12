@@ -3,7 +3,7 @@ pipeline {
     tools { maven 'Maven3'; jdk 'JDK22' }
     environment {
         DOCKER_HUB_USER = "thefruss032"
-        IMAGE_NAME = "peminjaman-service"
+        IMAGE_NAME = "eureka-server"
         REGISTRY_CREDS = "docker-hub-creds"
     }
     stages {
@@ -21,8 +21,9 @@ pipeline {
         }
         stage('Deploy to K8s') {
             steps {
-                bat "kubectl set image deployment/peminjaman-app peminjaman=${DOCKER_HUB_USER}/${IMAGE_NAME}:${env.BUILD_NUMBER} -n perpustakaan-ns"
-                bat "kubectl rollout status deployment/peminjaman-app -n perpustakaan-ns"
+                // Sesuai dengan 02-eureka.yaml (deployment name: eureka-server, container name: eureka)
+                bat "kubectl set image deployment/eureka-server eureka=${DOCKER_HUB_USER}/${IMAGE_NAME}:${env.BUILD_NUMBER} -n perpustakaan-ns"
+                bat "kubectl rollout status deployment/eureka-server -n perpustakaan-ns"
             }
         }
     }

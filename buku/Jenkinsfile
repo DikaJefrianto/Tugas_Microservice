@@ -1,42 +1,75 @@
 pipeline {
     agent any
     
+    tools {
+        // Nama 'Maven3' dan 'JDK17' harus sama dengan yang Anda set di Manage Jenkins -> Tools
+        maven 'Maven3'
+        jdk 'JDK22'
+    }
+
     environment {
-        REGISTRY = "docker.io/thefruss032"       // Ganti username DockerHub
-        IMAGE_NAME = "buku"        // Ganti per service
+        // 1. GANTI dengan username Docker Hub Anda
+        DOCKER_HUB_USER = "thefruss032"
+        IMAGE_NAME = "buku-service"
+        // 2. ID Credentials yang Anda buat di Jenkins (Langkah sebelumnya)
+        REGISTRY_CREDS = "docker-hub-creds"
     }
 
     stages {
-        stage('Checkout Code') {
+        stage('1. Build JAR') {
             steps {
-                git branch: 'main', url: 'https://github.com/USERNAME/REPO.git'
+                echo 'Building JAR file...'
+                // Membersihkan dan membungkus aplikasi menjadi file .jar
+                bat 'mvn clean package -DskipTests'
             }
         }
 
-        stage('Build Docker Image') {
+        stage('2. Build Docker Image') {
             steps {
-                sh "docker build -t $REGISTRY/$IMAGE_NAME:latest ."
+                echo 'Building Docker Image...'
+                // Membuat image dengan tag berdasarkan nomor build Jenkins agar unik
+                bat "docker build -t ${DOCKER_HUB_USER}/${IMAGE_NAME}:${env.BUILD_NUMBER} ."
+                bat "docker build -t ${DOCKER_HUB_USER}/${IMAGE_NAME}:latest ."
             }
         }
 
-        stage('Login DockerHub') {
+        stage('3. Push to Docker Hub') {
             steps {
-                withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', usernameVariable: 'USER', passwordVariable: 'PASS')]) {
-                    sh "echo $PASS | docker login -u $USER --password-stdin"
+                echo 'Pushing Image to Docker Hub...'
+                script {
+                    // Menggunakan username & password dari Jenkins Credentials
+                    withCredentials([usernamePassword(credentialsId: REGISTRY_CREDS, passwordVariable: 'PASS', usernameVariable: 'USER')]) {
+                        bat "docker login -u %USER% -p %PASS%"
+                        bat "docker push ${DOCKER_HUB_USER}/${IMAGE_NAME}:${env.BUILD_NUMBER}"
+                        bat "docker push ${DOCKER_HUB_USER}/${IMAGE_NAME}:latest"
+                    }
                 }
             }
         }
 
-        stage('Push Docker Image') {
+        stage('4. Deploy to Kubernetes') {
             steps {
-                sh "docker push $REGISTRY/$IMAGE_NAME:latest"
+                echo 'Updating Kubernetes Deployment...'
+                // Menginstruksikan K8s untuk mengganti image lama dengan yang baru saja di-push
+                // Pastikan nama deployment di K8s adalah 'buku-app' (cek di 03-apps.yaml)
+                bat "kubectl set image deployment/buku-app buku=${DOCKER_HUB_USER}/${IMAGE_NAME}:${env.BUILD_NUMBER} -n perpustakaan-ns"
+                
+                // Menunggu sampai proses update selesai
+                bat "kubectl rollout status deployment/buku-app -n perpustakaan-ns"
             }
         }
+    }
 
-        stage('Deploy to Kubernetes') {
-            steps {
-                sh "kubectl apply -f manifests/"
-            }
+    post {
+        success {
+            echo "------------------------------------------------------------"
+            echo "CONGRATS! Service ${IMAGE_NAME} build #${env.BUILD_NUMBER} is LIVE!"
+            echo "------------------------------------------------------------"
+        }
+        failure {
+            echo "------------------------------------------------------------"
+            echo "ERROR! Build #${env.BUILD_NUMBER} failed. Check logs above."
+            echo "------------------------------------------------------------"
         }
     }
 }
