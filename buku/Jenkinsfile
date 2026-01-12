@@ -1,75 +1,40 @@
 pipeline {
     agent any
-    
-    tools {
-        // Nama 'Maven3' dan 'JDK17' harus sama dengan yang Anda set di Manage Jenkins -> Tools
-        maven 'Maven3'
-        jdk 'JDK22'
-    }
-
+    tools { maven 'Maven3'; jdk 'JDK17' }
     environment {
-        // 1. GANTI dengan username Docker Hub Anda
         DOCKER_HUB_USER = "thefruss032"
         IMAGE_NAME = "buku-service"
-        // 2. ID Credentials yang Anda buat di Jenkins (Langkah sebelumnya)
         REGISTRY_CREDS = "docker-hub-creds"
     }
-
     stages {
-        stage('1. Build JAR') {
+        stage('1. Setup Workspace & Checkout') {
             steps {
-                echo 'Building JAR file...'
-                // Membersihkan dan membungkus aplikasi menjadi file .jar
-                bat 'mvn clean package -DskipTests'
-            }
-        }
-
-        stage('2. Build Docker Image') {
-            steps {
-                echo 'Building Docker Image...'
-                // Membuat image dengan tag berdasarkan nomor build Jenkins agar unik
-                bat "docker build -t ${DOCKER_HUB_USER}/${IMAGE_NAME}:${env.BUILD_NUMBER} ."
-                bat "docker build -t ${DOCKER_HUB_USER}/${IMAGE_NAME}:latest ."
-            }
-        }
-
-        stage('3. Push to Docker Hub') {
-            steps {
-                echo 'Pushing Image to Docker Hub...'
-                script {
-                    // Menggunakan username & password dari Jenkins Credentials
-                    withCredentials([usernamePassword(credentialsId: REGISTRY_CREDS, passwordVariable: 'PASS', usernameVariable: 'USER')]) {
-                        bat "docker login -u %USER% -p %PASS%"
-                        bat "docker push ${DOCKER_HUB_USER}/${IMAGE_NAME}:${env.BUILD_NUMBER}"
-                        bat "docker push ${DOCKER_HUB_USER}/${IMAGE_NAME}:latest"
+                ws("F:/Jenkins/workspace/${IMAGE_NAME}") {
+                    checkout scm
+                    echo "Workspace set to F:/Jenkins/workspace/${IMAGE_NAME}"
+                    
+                    dir('buku') {
+                        echo '2. Building JAR...'
+                        bat 'mvn clean package -DskipTests'
+                        
+                        echo '3. Building & Pushing Docker Image...'
+                        script {
+                            bat "docker build -t ${DOCKER_HUB_USER}/${IMAGE_NAME}:${env.BUILD_NUMBER} ."
+                            bat "docker build -t ${DOCKER_HUB_USER}/${IMAGE_NAME}:latest ."
+                            
+                            withCredentials([usernamePassword(credentialsId: REGISTRY_CREDS, passwordVariable: 'PASS', usernameVariable: 'USER')]) {
+                                bat "docker login -u %USER% -p %PASS%"
+                                bat "docker push ${DOCKER_HUB_USER}/${IMAGE_NAME}:${env.BUILD_NUMBER}"
+                                bat "docker push ${DOCKER_HUB_USER}/${IMAGE_NAME}:latest"
+                            }
+                        }
                     }
+                    
+                    echo '4. Deploying to Kubernetes...'
+                    bat "kubectl set image deployment/buku-app buku=${DOCKER_HUB_USER}/${IMAGE_NAME}:${env.BUILD_NUMBER} -n perpustakaan-ns"
+                    bat "kubectl rollout status deployment/buku-app -n perpustakaan-ns"
                 }
             }
-        }
-
-        stage('4. Deploy to Kubernetes') {
-            steps {
-                echo 'Updating Kubernetes Deployment...'
-                // Menginstruksikan K8s untuk mengganti image lama dengan yang baru saja di-push
-                // Pastikan nama deployment di K8s adalah 'buku-app' (cek di 03-apps.yaml)
-                bat "kubectl set image deployment/buku-app buku=${DOCKER_HUB_USER}/${IMAGE_NAME}:${env.BUILD_NUMBER} -n perpustakaan-ns"
-                
-                // Menunggu sampai proses update selesai
-                bat "kubectl rollout status deployment/buku-app -n perpustakaan-ns"
-            }
-        }
-    }
-
-    post {
-        success {
-            echo "------------------------------------------------------------"
-            echo "CONGRATS! Service ${IMAGE_NAME} build #${env.BUILD_NUMBER} is LIVE!"
-            echo "------------------------------------------------------------"
-        }
-        failure {
-            echo "------------------------------------------------------------"
-            echo "ERROR! Build #${env.BUILD_NUMBER} failed. Check logs above."
-            echo "------------------------------------------------------------"
         }
     }
 }

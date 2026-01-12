@@ -1,28 +1,29 @@
 pipeline {
     agent any
-    tools { maven 'Maven3'; jdk 'JDK22' }
+    tools { maven 'Maven3'; jdk 'JDK17' }
     environment {
         DOCKER_HUB_USER = "thefruss032"
         IMAGE_NAME = "pengembalian-service"
         REGISTRY_CREDS = "docker-hub-creds"
     }
     stages {
-        stage('Build JAR') { steps { bat 'mvn clean package -DskipTests' } }
-        stage('Docker Build') { steps { bat "docker build -t ${DOCKER_HUB_USER}/${IMAGE_NAME}:${env.BUILD_NUMBER} ." } }
-        stage('Push to Hub') {
+        stage('CI/CD Process') {
             steps {
-                script {
-                    withCredentials([usernamePassword(credentialsId: REGISTRY_CREDS, passwordVariable: 'PASS', usernameVariable: 'USER')]) {
-                        bat "docker login -u %USER% -p %PASS%"
-                        bat "docker push ${DOCKER_HUB_USER}/${IMAGE_NAME}:${env.BUILD_NUMBER}"
+                ws("F:/Jenkins/workspace/${IMAGE_NAME}") {
+                    checkout scm
+                    dir('pengembalian_service') {
+                        bat 'mvn clean package -DskipTests'
+                        script {
+                            bat "docker build -t ${DOCKER_HUB_USER}/${IMAGE_NAME}:${env.BUILD_NUMBER} ."
+                            withCredentials([usernamePassword(credentialsId: REGISTRY_CREDS, passwordVariable: 'PASS', usernameVariable: 'USER')]) {
+                                bat "docker login -u %USER% -p %PASS%"
+                                bat "docker push ${DOCKER_HUB_USER}/${IMAGE_NAME}:${env.BUILD_NUMBER}"
+                            }
+                        }
                     }
+                    bat "kubectl set image deployment/pengembalian-app pengembalian=${DOCKER_HUB_USER}/${IMAGE_NAME}:${env.BUILD_NUMBER} -n perpustakaan-ns"
+                    bat "kubectl rollout status deployment/pengembalian-app -n perpustakaan-ns"
                 }
-            }
-        }
-        stage('Deploy to K8s') {
-            steps {
-                bat "kubectl set image deployment/pengembalian-app pengembalian=${DOCKER_HUB_USER}/${IMAGE_NAME}:${env.BUILD_NUMBER} -n perpustakaan-ns"
-                bat "kubectl rollout status deployment/pengembalian-app -n perpustakaan-ns"
             }
         }
     }
