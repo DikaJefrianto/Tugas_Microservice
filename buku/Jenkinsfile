@@ -20,7 +20,6 @@ pipeline {
                         echo '3. Building & Pushing Docker Image...'
                         script {
                             bat "docker build -t ${DOCKER_HUB_USER}/${IMAGE_NAME}:${env.BUILD_NUMBER} ."
-                            bat "docker build -t ${DOCKER_HUB_USER}/${IMAGE_NAME}:latest ."
                             
                             withCredentials([usernamePassword(credentialsId: REGISTRY_CREDS, passwordVariable: 'PASS', usernameVariable: 'USER')]) {
                                 bat "docker login -u %USER% -p %PASS%"
