@@ -1,5 +1,5 @@
-# UAS Arsitektur Berbasis Layanan  
-## Implementasi Arsitektur Microservices pada Sistem Perpustakaan
+# Laporan UAS Arsitektur Berbasis Layanan
+## Implementasi Arsitektur Microservices Modern dengan CQRS Hybrid, Event-Driven Architecture, dan Automated Deployment
 
 **Nama** : Dika Jefrianto  
 **Kelas** : TRPL 3D  
@@ -9,166 +9,140 @@
 
 ## 1. Pendahuluan
 
-Proyek ini merupakan implementasi **arsitektur microservices** pada sistem **Perpustakaan** dengan menerapkan pendekatan **Command Query Responsibility Segregation (CQRS)** dan **Event-Driven Architecture**.  
-Sistem dikembangkan menggunakan **Spring Boot**, dideploy ke **Kubernetes**, serta dilengkapi dengan **CI/CD Pipeline**, **Logging terpusat**, dan **Monitoring sistem** untuk memenuhi prinsip aplikasi modern yang **scalable**, **reliable**, dan **maintainable**.
+Proyek ini merupakan implementasi **arsitektur Microservices** pada sistem **Manajemen Perpustakaan** yang dirancang untuk mengatasi permasalahan skalabilitas, performa, dan maintainability pada sistem terdistribusi. Pendekatan utama yang digunakan adalah **Command Query Responsibility Segregation (CQRS)** dengan pemisahan jalur tulis dan jalur baca data.
+
+Sistem menerapkan konsep **Hybrid Database**, di mana **MySQL** digunakan sebagai database transaksi (*Write Side*) dan **MongoDB** digunakan sebagai database pembacaan (*Read Side*). Sinkronisasi data dilakukan secara asinkron melalui **Event-Driven Architecture** menggunakan **RabbitMQ**, serta seluruh layanan dikelola dan dideploy menggunakan **Kubernetes** sebagai platform orkestrasi kontainer.
 
 ---
 
 ## 2. Teknologi yang Digunakan
 
-| Kategori | Teknologi |
-|--------|----------|
-| Backend | Spring Boot, Java 17 |
-| Message Broker | RabbitMQ |
-| Database Command | MySQL |
-| Database Query | MongoDB |
-| Service Discovery | Eureka Server |
-| API Management | API Gateway |
-| Container & Orchestration | Docker, Kubernetes |
-| Logging | ELK Stack (Elasticsearch, Logstash, Kibana) |
-| Monitoring | Prometheus, Grafana |
-| CI/CD | Jenkins |
+| Kategori | Teknologi | Deskripsi |
+|--------|----------|----------|
+| Backend Framework | Spring Boot 3.x | Framework utama berbasis Java 17 |
+| Message Broker | RabbitMQ | Media komunikasi asinkron dan sinkronisasi event |
+| Write Database | MySQL 8.0 | Menjamin konsistensi dan integritas data transaksi |
+| Read Database | MongoDB | Optimasi query baca dengan struktur fleksibel |
+| Service Discovery | Netflix Eureka | Registrasi dan penemuan layanan secara dinamis |
+| API Gateway | Spring Cloud Gateway | Routing dan single entry point API |
+| Orchestration | Kubernetes | Manajemen deployment dan resource |
+| Logging | ELK Stack | Logging terpusat lintas layanan |
+| Monitoring | Prometheus & Grafana | Monitoring performa dan resource |
+| CI/CD | Jenkins | Otomatisasi build dan deployment |
 
 ---
 
-## 3. Arsitektur Sistem
+## 3. Arsitektur Sistem dan Implementasi
 
-### 3.1 Arsitektur Microservices
+### 3.1 Penerapan CQRS Hybrid
 
-Sistem dibangun menggunakan beberapa microservice independen sebagai berikut:
-1. **Service Anggota**
-2. **Service Buku**
-3. **Service Peminjaman**
-4. **Service Pengembalian** (menangani proses bisnis pengembalian)
-5. **API Gateway**
-6. **Eureka Server**
+Pola CQRS diterapkan tidak hanya pada level kode, tetapi juga pada pemisahan database fisik untuk meningkatkan efisiensi sistem.
 
-Setiap service memiliki database sendiri sesuai prinsip **Database per Service**.
+- **Command Side (Write Side)**  
+  Seluruh operasi Create, Update, dan Delete diproses oleh Command Handler dan disimpan ke database MySQL.
 
----
+- **Event Publication**  
+  Setelah data berhasil dipersistenkan, sistem mengirimkan event ke RabbitMQ dalam format `Map<String, Object>` untuk menghindari permasalahan serialisasi Hibernate Proxy.
 
-### 3.2 Penerapan CQRS
+- **Query Side (Read Side)**  
+  Sync Consumer mendengarkan event dari RabbitMQ dan memproyeksikan data ke MongoDB sebagai *read model*.
 
-Arsitektur CQRS diterapkan dengan pemisahan sebagai berikut:
-
-- **Command Side (Write)**
-  - Menggunakan **MySQL**
-  - Mengelola operasi Create, Update, dan Delete
-- **Query Side (Read)**
-  - Menggunakan **MongoDB**
-  - Mengelola operasi Read
-
-Sinkronisasi data antara Command dan Query dilakukan secara **asynchronous** menggunakan **RabbitMQ**.
+Pendekatan ini memungkinkan proses pembacaan data berjalan lebih cepat karena tidak membebani database transaksi utama.
 
 ---
 
-### 3.3 Event-Driven Communication
+### 3.2 Komunikasi Event-Driven Antar Layanan
 
-Komunikasi antar service menggunakan pendekatan **event-driven**, di mana:
-- Setiap perubahan data pada Command Side akan menghasilkan event
-- Event dikirim ke RabbitMQ
-- Service terkait akan memproses event sesuai kebutuhan masing-masing
+Setiap layanan berkomunikasi menggunakan mekanisme event sehingga memiliki keterikatan rendah (*loosely coupled*).
 
-Pendekatan ini mengurangi **tight coupling** antar service.
+- **Proses Peminjaman**  
+  Service Peminjaman mengirim event setelah transaksi tersimpan. Service Buku menerima event tersebut dan memperbarui status buku menjadi *Dipinjam*.
 
----
-
-## 4. Implementasi Logging dan Monitoring
-
-### 4.1 Logging (ELK Stack)
-
-Sistem logging terpusat menggunakan:
-- **Logstash** sebagai log collector
-- **Elasticsearch** sebagai penyimpanan log
-- **Kibana** sebagai visualisasi log
-
-Aplikasi mengirim log melalui **TCP Appender** dengan konfigurasi tambahan pada `logback-spring.xml` untuk mempermudah proses filtering berdasarkan nama service.
+- **Proses Pengembalian**  
+  Service Pengembalian menangani proses bisnis utama seperti perhitungan denda dan notifikasi email. Event yang dihasilkan digunakan oleh:
+  - Service Peminjaman untuk mengubah status transaksi menjadi *SELESAI*
+  - Service Buku untuk mengubah status buku menjadi *Tersedia*
 
 ---
 
-### 4.2 Monitoring (Prometheus dan Grafana)
+## 4. Observability Sistem
 
-Monitoring sistem dilakukan dengan:
-- **Spring Boot Actuator** sebagai penyedia metrik
-- **Prometheus** sebagai pengambil data metrik
-- **Grafana** sebagai media visualisasi
+### 4.1 Logging Terpusat (ELK Stack)
 
-Dashboard Grafana digunakan untuk memantau:
-- Penggunaan CPU dan Memory
-- Status service
-- Performa aplikasi
+Sistem logging terpusat diimplementasikan menggunakan **ELK Stack** dengan mekanisme sebagai berikut:
 
----
+- Log dikirim ke Logstash melalui TCP port 5000
+- Setiap layanan menggunakan konfigurasi `logback-spring.xml`
+- Penambahan field `app_name` untuk memudahkan filtering log di Kibana
 
-## 5. Deployment Menggunakan Kubernetes
-
-### 5.1 Konfigurasi Kubernetes
-
-Deployment sistem dilakukan menggunakan file **YAML Manifest**, yang meliputi:
-- **Namespace** untuk isolasi lingkungan
-- **Secrets** untuk menyimpan konfigurasi sensitif
-- **Deployment dan Service** untuk setiap microservice
+Pendekatan ini mempermudah proses debugging dan analisis kesalahan sistem.
 
 ---
 
-### 5.2 Optimasi Resource
+### 4.2 Monitoring Performa (Prometheus dan Grafana)
 
-Untuk menyesuaikan dengan keterbatasan resource lokal, setiap pod dikonfigurasi dengan:
-- Batasan memory
-- Pengaturan JVM heap size
+Monitoring performa aplikasi dilakukan dengan:
 
-Pendekatan ini bertujuan untuk menjaga stabilitas cluster Kubernetes.
+- Micrometer Prometheus melalui endpoint `/actuator/prometheus`
+- Akses NodePort Kubernetes agar Prometheus eksternal dapat melakukan scraping
+- Visualisasi metrik menggunakan Grafana Dashboard (ID: 11378)
+
+Metrik yang dipantau meliputi penggunaan CPU, memory, dan latency HTTP request.
+
+---
+
+## 5. Deployment dan Optimasi Resource
+
+### 5.1 Deployment di Kubernetes
+
+Deployment dilakukan menggunakan file manifest Kubernetes (YAML) yang mencakup:
+
+- Namespace untuk isolasi resource
+- Secrets untuk penyimpanan kredensial
+- Konfigurasi environment melalui `SPRING_APPLICATION_JSON`
+
+---
+
+### 5.2 Strategi Optimasi RAM
+
+Untuk menyesuaikan dengan keterbatasan resource atau RAM Device yang Terbatas, dilakukan optimasi sebagai berikut:
+
+- Pembatasan heap memory JVM (`-Xmx256M` dan `-Xms128M`)
+- Batas maksimal memory Pod sebesar `384Mi`
+- Pemisahan infrastruktur monitoring dan database menggunakan Docker Compose
 
 ---
 
 ## 6. CI/CD Pipeline Menggunakan Jenkins
 
-Pipeline CI/CD diterapkan menggunakan **Jenkins** dengan tahapan:
-1. **Build Aplikasi** menggunakan Maven
-2. **Build dan Push Docker Image** ke Docker Hub
-3. **Deployment Otomatis** ke Kubernetes menggunakan `kubectl`
+Pipeline CI/CD diimplementasikan menggunakan **Jenkins Native** dengan tahapan:
 
-Pipeline ini memungkinkan proses pengembangan dan deployment dilakukan secara **otomatis dan konsisten**.
+1. Build aplikasi menggunakan Maven  
+2. Build dan push Docker Image ke Docker Hub  
+3. Deployment otomatis ke Kubernetes menggunakan mekanisme *rolling update*  
 
----
-
-## 7. Alur Menjalankan Sistem
-
-### 7.1 Menjalankan Infrastruktur Monitoring
-- ELK Stack
-- Prometheus
-- Grafana
-
-Dijalankan menggunakan **Docker Compose**.
-
-### 7.2 Deployment Kubernetes
-- Pembuatan Namespace dan Secrets
-- Deployment database, message broker, dan service discovery
-- Deployment seluruh microservice dan API Gateway
+Pendekatan ini memastikan proses pengembangan dan deployment berjalan konsisten dan minim downtime.
 
 ---
 
-## 8. Akses Sistem
+## 7. Akses Dashboard Sistem
 
-| Komponen | Alamat |
-|-------|-------|
-| API Gateway | http://localhost:30000/api |
+| Komponen | URL |
+|--------|-----|
+| API Gateway | http://localhost:30000 |
+| Eureka Server | http://localhost:8761 |
 | Kibana | http://localhost:5601 |
 | Grafana | http://localhost:3000 |
-| Eureka Server | http://localhost:8761 |
+| RabbitMQ | http://localhost:15672 |
 | phpMyAdmin | http://localhost:32000 |
 | Mongo Express | http://localhost:8085 |
 
 ---
 
-## 9. Kesimpulan
+## 8. Kesimpulan
 
-Implementasi sistem ini menunjukkan penerapan **arsitektur microservices** dengan pendekatan **CQRS dan Event-Driven Architecture** yang terintegrasi dengan:
-- Kubernetes sebagai platform orkestrasi
-- ELK Stack untuk logging terpusat
-- Prometheus dan Grafana untuk monitoring
-- Jenkins untuk otomatisasi CI/CD
+Sistem Manajemen Perpustakaan ini berhasil mengimplementasikan **arsitektur Microservices modern** dengan pendekatan **CQRS Hybrid dan Event-Driven Architecture**. Pemisahan database meningkatkan performa pembacaan data tanpa mengorbankan integritas transaksi.
 
-Arsitektur ini mampu meningkatkan **skalabilitas**, **maintainability**, dan **reliability** sistem secara keseluruhan.
+Dukungan **Kubernetes**, **CI/CD Jenkins**, serta **Logging dan Monitoring terpusat** menjadikan sistem ini siap dikembangkan lebih lanjut dan dioperasikan dalam lingkungan produksi yang terdistribusi.
 
 ---
